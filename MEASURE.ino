@@ -1,3 +1,38 @@
+/* PROJETO DE METROLOGIA MECÂNICA
+  *  
+  * DIAGRAMA DE PORTAS
+  *   - Arduino Nano
+  *   - VL53L0X = {SCL: A5, SDA: A4, GPIO1: D4, XSHUT: --}
+  *   - DHT11   = {DATA: D3}
+  *   - Piezo   = {+: D5}
+  * 
+  * LISTA DE COMANDOS:
+  *   -> SVC START: Inicia o serviço da máquina
+  *     -> D: Efetua a medição
+  *     -> E: Interrompe o serviço
+  *   -> SYS: Altera as variáveis de sistema
+  *     -> -VVC [uint]: Altera o valor verdadeiro convencionado do parâmetro de calibração para [uint]
+  *     -> -RN [byte]: Altera o número de leituras por execução para [byte]
+  *     -> -_VVC: Visualiza o valor verdadeiro convencionado do parâmetro de calibração
+  *     -> -_RN: Visualiza o número de leituras por execução
+  *     -> -_C: Visualiza o valor da correção
+  *   -> TOF: Executa uma operação no sensor VL53L0X
+  *     -> -C [byte]: Realiza a calibração do sensor com [byte] medições
+  *       -> D: Efetua a medição
+  *       -> E: Interrompe o serviço
+  *     -> -M [byte]: Realiza [byte] medições instantâneas corrigidas
+  *     -> -R [byte]: Realiza [byte] medições instantâneas cruas
+  *   -> DHT: Executa uma operação no sensor DHT11 ~(Desativado por padrão devido ao armazenamento)
+  *     -> -R ['H','A','T']: Realiza medições instantâneas da ['T','A'] == Temperatura, ['H','A'] == Umidade
+  *     -> -F: Apresenta as features (características) do sensor
+  * 
+  * DESENVOLVIDO POR:
+  *   -> Adiel Assis Menezes da Silva
+  *   -> Leonardo Kenji Ueze
+  *   -> Marco Antônio Rocha
+  *   -> Marco Antônio Zerbielli Bee
+*/
+
 #include <Adafruit_VL53L0X.h>
 #include <DHT.h>
 #include <DHT_U.h>
@@ -15,10 +50,10 @@ byte readNumb = 20;
 byte readNumbC = 20;
 unsigned int averageReadBase;
 unsigned int averageReadBlock;
-char temperature;
-byte humidity;
+// char temperature;
+// byte humidity;
 unsigned int blockHeight;
-unsigned int calVvc = 100; //
+unsigned int calVvc = 100;
 int c = 0;
 
 #define DHTPORT 3
@@ -105,16 +140,23 @@ void loop() {
         Serial.print(F("\tVVC -> ")); Serial.print(spltCmd[2]); Serial.println(F("mm"));
         calVvc = spltCmd[2].toFloat();
       }
+      else if(spltCmd[1] == "-_VVC") {  Serial.print(F("\tVVC == ")); Serial.print(spltCmd[2]); Serial.println(F("mm")); }
       else if(spltCmd[1] == "-RN") {
         Serial.print(F("\tRN -> ")); Serial.print(spltCmd[2]); Serial.println(F("x"));
         readNumb = spltCmd[2].toInt();
       }
+      else if(spltCmd[1] == "-_RN") { Serial.print(F("\tRN == ")); Serial.print(spltCmd[2]); Serial.println(F("x")); }
+      else if(spltCmd[1] == "-_C") { Serial.print(F("\tC == ")); Serial.print(c); Serial.println(F("mm")); }
     }
     else if(spltCmd[0] == "TOF") {
       if(spltCmd[1] == "-C") { cal = true; readNumbC = spltCmd[2].toInt(); }
-      else if(spltCmd[1] == "-R") {
+      else if(spltCmd[1] == "-M") {
         Serial.println(F("Lendo ToF:"));
         for(byte r = 0; r < spltCmd[2].toInt(); r++) { tofPrint("\t\t", r+1, tofRead(c)); }
+      }
+      else if(spltCmd[1] == "-R") {
+        Serial.println(F("Lendo ToF:"));
+        for(byte r = 0; r < spltCmd[2].toInt(); r++) { tofPrint("\t\t", r+1, tofRead(0)); }
       }
     }
     /*else if(spltCmd[0] == "DHT") {
@@ -167,7 +209,7 @@ void loop() {
     else if(spltCmd[0] == "E") { exe = false; Serial.print(F("\t")); Serial.print(F("Serviço parado")); }
   }
 
-  else if(cal) { //Error spltCmd[2] empty
+  else if(cal) {
     if(spltCmd[0] == "D") { calStep++; }
     if(spltCmd[0] == "E") { Serial.println(F("Calibração parada")); calStep = 0; cal = false; }
     averageReadBase = 0;
@@ -195,23 +237,24 @@ void loop() {
       Serial.println(F("\tFim da Calibração:"));
       calStep = 0;
       cal = false;
-      sensors_event_t event;
       averageReadBlock = averageReadBlock / readNumbC;
       blockHeight = averageReadBase - averageReadBlock;
       c = calVvc - blockHeight;
-      Serial.print(F("\t\tDist base:  ")); Serial.print(averageReadBase); Serial.println(F("mm"));
-      Serial.print(F("\t\tDist bloco: ")); Serial.print(averageReadBlock); Serial.println(F("mm"));
-      Serial.print(F("\t\tCorreção:   ")); Serial.print(c); Serial.println(F("mm"));
+      Serial.print(F("\t\tBase:  ")); Serial.print(averageReadBase); Serial.println(F("mm"));
+      Serial.print(F("\t\tBloco: ")); Serial.print(averageReadBlock); Serial.println(F("mm"));
+      Serial.print(F("\t\tCorr:  ")); Serial.print(c); Serial.println(F("mm"));
+      sensors_event_t event;
       dht.temperature().getEvent(&event);
-      temperature = event.temperature;
+      char temperature = event.temperature;
       dht.humidity().getEvent(&event);
-      humidity = event.humidity;
-      if(isnan(temperature)) { Serial.println(F("Erro[temperatura]")); }
-      else { Serial.print(F("Temperatura: ")); Serial.print(temperature); Serial.println(F("°C")); }
-      if(isnan(humidity)) { Serial.println(F("Erro[humidade]")); }
-      else { Serial.print("Temperatura: "); Serial.print(humidity); Serial.println(F("%")); }
+      int humidity = event.relative_humidity;
+      if(isnan(temperature)) { Serial.println(F("Erro[Temp]")); }
+      else { Serial.print(F("Temp: ")); Serial.print(temperature,DEC); Serial.println(F("°C")); }
+      if(isnan(humidity)) { Serial.println(F("Erro[Umid]")); }
+      else { Serial.print("Umid: "); Serial.print(humidity); Serial.println(F("%")); }
     }
   }
+  
   Cmd_clear(spltCmd);
   recived = false;
 }
