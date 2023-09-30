@@ -6,28 +6,23 @@
 #define SERIALDELAY 25
 
 #define PZPORT 5
-#define BASSNOTE 264
-#define MIDNOTE 579
-#define TREBLENOTE 1198
-#define QNOTES 3
-const int NOTES[QNOTES] = {BASSNOTE, MIDNOTE, TREBLENOTE};
+const int NOTES[3] = {264, 579, 1198};
 
-#define TOFGPIO 4
+//#define TOFGPIO 4
 VL53L0X_RangingMeasurementData_t measure;
 bool debugTof = false;
-unsigned int currentValue;
 byte readNumb = 20;
+byte readNumbC = 20;
 unsigned int averageReadBase;
 unsigned int averageReadBlock;
+char temperature;
+byte humidity;
 unsigned int blockHeight;
 unsigned int calVvc = 100; //
-int c;
-//byte readNumbC = 20;
-//int timeoutTof = 50;
+int c = 0;
 
 #define DHTPORT 3
 #define DHTTYPE DHT11
-int limDelay;
 
 bool recived = false;
 String spltCmd[3];
@@ -39,21 +34,6 @@ byte calStep = 0;
 
 Adafruit_VL53L0X tof = Adafruit_VL53L0X();
 DHT_Unified dht(DHTPORT, DHTTYPE);
-
-void setup() {
-  Serial.begin(SERIALSPEED);
-  Serial.setTimeout(SERIALDELAY);
-
-  for(int s = 0; !Serial; s++) {
-    delay(10);
-    if(s >= 500) { Serial.println("Load error in Serial"); }
-  }
-  
-  //if(!dht.begin()) { Serial.println("Load error in DHT sensor"); }
-  if(!tof.begin()) { Serial.println("Load error in ToF sensor"); }
-  pinMode(PZPORT, OUTPUT);
-  Sounds_turnOn(PZPORT);
-}
 
 void Sounds_turnOn(int port) {
   const int n[3] = {NOTES[1],NOTES[0],NOTES[2]};
@@ -69,149 +49,169 @@ void Sounds_turnOn(int port) {
 void Cmd_read(String* splited, bool* state, char breakReadIn, char splitIn) {
   String cmd;
   int strCnt = 0;
-  int i;
   if(Serial.available() > 0) {
+    int i;
     *state = true;
     cmd = Serial.readStringUntil(breakReadIn);
     cmd.toUpperCase();
+    Serial.print(F("<< ")); Serial.println(cmd);
     while (cmd.length() > 0) {
       i = cmd.indexOf(splitIn);
-      if (i == -1) { splited[strCnt++] = cmd; break; }
+      if(i == -1) { splited[strCnt++] = cmd; break; }
       else { splited[strCnt++] = cmd.substring(0, i); cmd = cmd.substring(i + 1); }
     }
-    Serial.print("<< "); Serial.print(spltCmd[0]); Serial.print(' '); Serial.print(spltCmd[1]); Serial.print(' '); Serial.println(spltCmd[2]);
   }
 }
 
-unsigned int tofRead() {
+void Cmd_clear(String* c) { for(byte i = 0; i < 3; i++) { c[i] = ""; } }
+
+unsigned int tofRead(byte correction) {
   tof.rangingTest(&measure, debugTof);
-  if(measure.RangeStatus != 4) { return measure.RangeMilliMeter; }
+  if(measure.RangeStatus != 4) { return measure.RangeMilliMeter + correction; }
   return(0);
 }
-void Cmd_clear(String* c) {
-  for(byte i = 0; i < 3; i++) { c[i] = ""; }
+
+void tofPrint(String s, byte r, unsigned int v) {
+  Serial.print(s);
+  Serial.print(F("\t"));
+  Serial.print(r+1);
+  Serial.print(F(": "));
+  Serial.print(tofRead(c));
+  Serial.println(F("mm"));
 }
+
+
+void setup() {
+  Serial.begin(SERIALSPEED);
+  Serial.setTimeout(SERIALDELAY);
+  delay(600);
+  Serial.println("Pronto[Serial]");
+  dht.begin();
+  for(byte s = 0; s < 30; s++) { if(tof.begin()) { break; } }
+  tof.begin() ? Serial.println(F("Pronto[ToF]")) : Serial.println(F("Erro[ToF]"));
+  DDRD = B00100000;
+  Serial.println(F("Setup pronto"));
+  Sounds_turnOn(PZPORT);
+}
+
 
 void loop() {
   Cmd_read(spltCmd, &recived, '\n', ' ');
 
   if(recived && !exe && !cal) {
-    
-    if(spltCmd[0] == "SVC") {
-      if(spltCmd[1] == "START") { exe = true; }
-    }
-    
+    if(spltCmd[0] == "SVC") { if(spltCmd[1] == "START") { exe = true; } }
     else if(spltCmd[0] == "SYS") {
-      if(spltCmd[1] == "-D")        { Serial.print("\tDistância da base: "); Serial.print(spltCmd[2]); Serial.println(F("mm")); } //Att
-      else if(spltCmd[1] == "-VVC") { Serial.print("\tParâmetro de calibração: "); Serial.print(spltCmd[2]); Serial.println(F("mm")); calVvc = spltCmd[2].toFloat(); }
-      else if(spltCmd[1] == "-RN")  { Serial.print("\tServiço atualizado para "); Serial.print(spltCmd[2]); Serial.println(" leituras"); readNumb =  spltCmd[2].toInt(); }
-      //else if(spltCmd[1] == "-RNC")  { Serial.print("\tCalibração atualizada para "); Serial.print(spltCmd[2]); Serial.println(" leituras"); readNumbC = spltCmd[2].toInt(); }
-
-    }
-    
-    else if(spltCmd[0] == "TOF") {
-      if(spltCmd[1] == "-C") { cal = true; }
-      else if(spltCmd[1] == "-R") {
-        Serial.println("Reading ToF Sensor:");
-        for(byte r = 0; r < spltCmd[2].toInt(); r++) {
-          Serial.print("\t"); Serial.print(r+1); Serial.print(": "); Serial.println(tofRead());
-        }
+      if(spltCmd[1] == "-VVC") { 
+        Serial.print(F("\tVVC -> ")); Serial.print(spltCmd[2]); Serial.println(F("mm"));
+        calVvc = spltCmd[2].toFloat();
+      }
+      else if(spltCmd[1] == "-RN") {
+        Serial.print(F("\tRN -> ")); Serial.print(spltCmd[2]); Serial.println(F("x"));
+        readNumb = spltCmd[2].toInt();
       }
     }
-    
-    else if(spltCmd[0] == "DHT") {
+    else if(spltCmd[0] == "TOF") {
+      if(spltCmd[1] == "-C") { cal = true; readNumbC = spltCmd[2].toInt(); }
+      else if(spltCmd[1] == "-R") {
+        Serial.println(F("Lendo ToF:"));
+        for(byte r = 0; r < spltCmd[2].toInt(); r++) { tofPrint("\t\t", r+1, tofRead(c)); }
+      }
+    }
+    /*else if(spltCmd[0] == "DHT") {
       if(spltCmd[1] == "-R") {
         for(int x = spltCmd[2].toInt(); x <= 0; x--) {
           sensors_event_t event;
           if(spltCmd[2] == "T" || spltCmd[2] == "A") {
             dht.temperature().getEvent(&event);
             if(isnan(event.temperature)) { Serial.println(F("Error reading temperature!")); }
-            else {
-              Serial.print  (F("Temperature: "));
-              Serial.print  (event.temperature);
-              Serial.println(F("°C"));
-            }
+            else { Serial.print("Temperatura: "); Serial.print(event.temperature); Serial.println("°C"); }
           }
           if(spltCmd[2] == "H" || spltCmd[2] == "A") {
             dht.humidity().getEvent(&event);
             if(isnan(event.relative_humidity)) { Serial.println(F("Error reading humidity!")); }
-            else {
-              Serial.print  (F("Humidity: "));
-              Serial.print  (event.relative_humidity);
-              Serial.println(F("%"));
-            }
+            else { Serial.print("Humidity: "); Serial.print(event.relative_humidity); Serial.println("%"); }
           }
         }
       }
-      if(spltCmd[1] == "-F") {
+      else if(spltCmd[1] == "-F") {
         sensor_t sensor;
         if(spltCmd[2] == "T" || spltCmd[2] == "A") {
           dht.temperature().getSensor(&sensor);
-          Serial.println(F("------------------------------------"));
-          Serial.println(F("Temperature Sensor"));
-          Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
-          Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
-          Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
-          Serial.print  (F("Range:       ")); Serial.print(sensor.min_value); Serial.println(F(" ~ ")); Serial.println(sensor.max_value); Serial.println(F("°C"));
-          Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("°C"));
-          Serial.println(F("------------------------------------"));
+          Serial.println("------------------------------------");
+          Serial.println("Sensor de Temperatura");
+          Serial.print  ("Sensor:      "); Serial.println(sensor.name);
+          Serial.print  ("Driver Ver:  "); Serial.println(sensor.version);
+          Serial.print  ("ID Único:    "); Serial.println(sensor.sensor_id);
+          Serial.print  ("Intervalo:   "); Serial.print(sensor.min_value); Serial.println(" ~ "); Serial.println(sensor.max_value); Serial.println("°C");
+          Serial.print  ("Resolução:   "); Serial.print(sensor.resolution); Serial.println("°C");
+          Serial.println("------------------------------------");
         }
         if(spltCmd[2] == "H" || spltCmd[2] == "A") {
           dht.humidity().getSensor(&sensor);
-          Serial.println(F("Humidity Sensor"));
-          Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
-          Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
-          Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
-          Serial.print  (F("Range:       ")); Serial.print(sensor.min_value); Serial.println(F(" ~ ")); Serial.println(sensor.max_value); Serial.println(F("%"));
-          Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("%"));
-          Serial.println(F("------------------------------------"));
+          Serial.println("Sensor de Humidade");
+          Serial.print  ("Sensor:     "); Serial.println(sensor.name);
+          Serial.print  ("Driver Ver: "); Serial.println(sensor.version);
+          Serial.print  ("ID Único:   "); Serial.println(sensor.sensor_id);
+          Serial.print  ("Intervalo:  "); Serial.print(sensor.min_value); Serial.println(" ~ "); Serial.println(sensor.max_value); Serial.println("%");
+          Serial.print  ("Resolução:  "); Serial.print(sensor.resolution); Serial.println("%");
+          Serial.println("------------------------------------");
         }
       }
-    }
-    else { Serial.print("Comando desconhecido"); }
-    recived = false;
+    }*/
   }
-  
+
   else if(exe) {
     if(spltCmd[0] == "D") {
-      for(byte x = 0; x < readNumb; x++) {
-        Serial.print("\t"); Serial.print(x+1); Serial.print(": "); Serial.print(tofRead()); Serial.println("mm");
-      }
+      for(byte x = 0; x < readNumb; x++) { tofPrint("\t\t", x+1, tofRead(c)); }
     }
-    else if(spltCmd[0] == "E") { exe = false; Serial.print("\t"); Serial.print("Service stoped"); }
+    else if(spltCmd[0] == "E") { exe = false; Serial.print(F("\t")); Serial.print(F("Serviço parado")); }
   }
 
   else if(cal) { //Error spltCmd[2] empty
-    if(calStep == 0) { Serial.println("\tCalibrando sensor ToF ("); Serial.print(spltCmd[2]); Serial.print(")..."); Serial.println("\t\tMedidas da base:\n"); calStep++; }
-    int rn = spltCmd[2].toInt();
     if(spltCmd[0] == "D") { calStep++; }
-    if(spltCmd[0] == "E") { calStep = 0; cal = false; }
+    if(spltCmd[0] == "E") { Serial.println(F("Calibração parada")); calStep = 0; cal = false; }
     averageReadBase = 0;
-    if(cal == 1) {
-      for(byte r = 0; r < rn; r++) {
-        unsigned int currentRead = tofRead();
-        Serial.print("\t\t\tBase "); Serial.print(r+1); Serial.print(": "); Serial.println(currentRead); Serial.println("mm");
-        averageReadBase += currentRead;
-      }
-      averageReadBase = averageReadBase / rn;
+    if(calStep == 0 || calStep == 3) {
+      Serial.print(F("\tCalibrar ToF -> ")); Serial.println(readNumbC);
       calStep++;
     }
-    if(calStep == 3) { Serial.println("\tCalibrando sensor ToF..."); Serial.println("\t\tMedidas do bloco:\n"); calStep++; }
+    else if(calStep == 2) {
+      Serial.println(F("\t\tMedidas [base]:"));
+      for(byte r = 0; r < readNumbC; r++) {
+        unsigned int currentRead = tofRead(0);
+        tofPrint("\t\t\tBase ", r+1, tofRead(0));
+        averageReadBase += currentRead;
+      }
+      averageReadBase = averageReadBase / readNumbC;
+      calStep++;
+    }
     else if(calStep == 5) {
-      Serial.println("\t\tMedidas do bloco:\n");
-      for(byte r = 0; r < rn; r++) {
-        unsigned int currentRead = tofRead();
-        Serial.print("\t\t\tBloco "); Serial.print(r+1); Serial.print(": "); Serial.println(currentRead); Serial.println("mm");
+      Serial.println(F("\t\tMedidas [bloco]:"));
+      for(byte r = 0; r < readNumbC; r++) {
+        unsigned int currentRead = tofRead(0);
+        tofPrint("\t\t\tBloco ", r+1, tofRead(0));
         averageReadBlock += currentRead;
       }
+      Serial.println(F("\tFim da Calibração:"));
       calStep = 0;
       cal = false;
+      sensors_event_t event;
+      averageReadBlock = averageReadBlock / readNumbC;
+      blockHeight = averageReadBase - averageReadBlock;
+      c = calVvc - blockHeight;
+      Serial.print(F("\t\tDist base:  ")); Serial.print(averageReadBase); Serial.println(F("mm"));
+      Serial.print(F("\t\tDist bloco: ")); Serial.print(averageReadBlock); Serial.println(F("mm"));
+      Serial.print(F("\t\tCorreção:   ")); Serial.print(c); Serial.println(F("mm"));
+      dht.temperature().getEvent(&event);
+      temperature = event.temperature;
+      dht.humidity().getEvent(&event);
+      humidity = event.humidity;
+      if(isnan(temperature)) { Serial.println(F("Erro[temperatura]")); }
+      else { Serial.print(F("Temperatura: ")); Serial.print(temperature); Serial.println(F("°C")); }
+      if(isnan(humidity)) { Serial.println(F("Erro[humidade]")); }
+      else { Serial.print("Temperatura: "); Serial.print(humidity); Serial.println(F("%")); }
     }
-    averageReadBlock = averageReadBlock / rn;
-    blockHeight = averageReadBase - averageReadBlock;
-    c = calVvc - blockHeight;
   }
-
   Cmd_clear(spltCmd);
   recived = false;
 }
