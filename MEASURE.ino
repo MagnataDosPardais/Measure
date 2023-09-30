@@ -27,10 +27,10 @@
   *     -> -F: Apresenta as features (características) do sensor
   * 
   * DESENVOLVIDO POR:
-  *   -> Adiel Assis Menezes da Silva
-  *   -> Leonardo Kenji Ueze
-  *   -> Marco Antônio Rocha
-  *   -> Marco Antônio Zerbielli Bee
+  *   -> CARGO 1: Adiel Assis Menezes da Silva
+  *   -> CARGO 2: Leonardo Kenji Ueze
+  *   -> CARGO 3: Marco Antônio Rocha
+  *   -> CARGO 4: Marco Antônio Zerbielli Bee
 */
 
 #include <Adafruit_VL53L0X.h>
