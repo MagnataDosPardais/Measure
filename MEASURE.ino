@@ -27,50 +27,50 @@
   *     -> -F: Apresenta as features (características) do sensor
   * 
   * DESENVOLVIDO POR:
-  *   -> CARGO 1: Adiel Assis Menezes da Silva
-  *   -> CARGO 2: Leonardo Kenji Ueze
-  *   -> CARGO 3: Marco Antônio Rocha
-  *   -> CARGO 4: Marco Antônio Zerbielli Bee
+  *   -> Adiel Assis Menezes da Silva
+  *   -> Leonardo Kenji Ueze
+  *   -> Marco Antônio Rocha
+  *   -> Marco Antônio Zerbielli Bee
 */
 
-#include <Adafruit_VL53L0X.h>
-#include <DHT.h>
+//Bibliotecas
+#include <Adafruit_VL53L0X.h> //Biblioteca do sensor VL53L0X
+#include <DHT.h>              //Biblioteca do sensor DHT
 #include <DHT_U.h>
 
-#define SERIALSPEED 9600
-#define SERIALDELAY 25
+#define SERIALSPEED 9600  //Velocidade do Serial
+#define SERIALDELAY 25    //Delay do Serial
 
-#define PZPORT 5
-const int NOTES[3] = {264, 579, 1198};
+#define PZPORT 5                        //Pino Piezo
+const int NOTES[3] = {264, 579, 1198};  //Notas do Piezo
 
-//#define TOFGPIO 4
-VL53L0X_RangingMeasurementData_t measure;
-bool debugTof = false;
-byte readNumb = 20;
-byte readNumbC = 20;
-unsigned int averageReadBase;
-unsigned int averageReadBlock;
+//#define TOFGPIO 4                       //Pino do GPIO1 do VL53L0X
+VL53L0X_RangingMeasurementData_t measure; //Struct do VL53L0X
+bool debugTof = false;                    //Ativação do modo debug
+byte readNumb = 20;                       //Quantidade de leituras do serviço
+byte readNumbC = 20;                      //Quantidade de leituras da calibração
+unsigned int averageReadBase;             //Média da distância Sensor-Base
+unsigned int averageReadBlock;            //Média da distância Sensor-Bloco
+unsigned int blockHeight;                 //Altura do bloco
+unsigned int calVvc = 100;                //Valor verdadeiro convencionado do bloco
+int c = 0;                                //Valor da correção
 // char temperature;
 // byte humidity;
-unsigned int blockHeight;
-unsigned int calVvc = 100;
-int c = 0;
 
-#define DHTPORT 3
-#define DHTTYPE DHT11
+#define DHTPORT 3     //Pino DHT
+#define DHTTYPE DHT11 //Modelo do sensor DHT
 
-bool recived = false;
-String spltCmd[3];
+bool recived = false; //Controle de comando recebido
+bool exe = false;     //Controle de execução de serviço
+bool cal = false;     //Controle de execução de calibração
+byte calStep = 0;     //Etapa da calibração
+String spltCmd[3];    //Comando recebido
 
-bool exe = false;
-bool cal = false;
-byte calStep = 0;
+Adafruit_VL53L0X tof = Adafruit_VL53L0X();  //Criação do objeto do VL53L0X
+DHT_Unified dht(DHTPORT, DHTTYPE);          //Criação do objeto do DHT
 
 
-Adafruit_VL53L0X tof = Adafruit_VL53L0X();
-DHT_Unified dht(DHTPORT, DHTTYPE);
-
-void Sounds_turnOn(int port) {
+void Sounds_turnOn(int port) {  //Som executado ao ser ligado
   const int n[3] = {NOTES[1],NOTES[0],NOTES[2]};
   const int p[3][2] = {{240,10},{240,10},{240,10}};
   for(byte i = 0; i < 3; i++) {
@@ -81,7 +81,7 @@ void Sounds_turnOn(int port) {
   }
 }
 
-void Cmd_read(String* splited, bool* state, char breakReadIn, char splitIn) {
+void Cmd_read(String* splited, bool* state, char breakReadIn, char splitIn) { //Ler o Serial
   String cmd;
   int strCnt = 0;
   if(Serial.available() > 0) {
@@ -98,15 +98,15 @@ void Cmd_read(String* splited, bool* state, char breakReadIn, char splitIn) {
   }
 }
 
-void Cmd_clear(String* c) { for(byte i = 0; i < 3; i++) { c[i] = ""; } }
+void Cmd_clear(String* c) { for(byte i = 0; i < 3; i++) { c[i] = ""; } }  //Limpar a variável do Serial
 
-unsigned int tofRead(byte correction) {
+unsigned int tofRead(byte correction) { //Leitura do sensor ToF
   tof.rangingTest(&measure, debugTof);
   if(measure.RangeStatus != 4) { return measure.RangeMilliMeter + correction; }
   return(0);
 }
 
-void tofPrint(String s, byte r, unsigned int v) {
+void tofPrint(String s, byte r, unsigned int v) { //Escrita do sensor ToF
   Serial.print(s);
   Serial.print(F("\t"));
   Serial.print(r+1);
@@ -117,10 +117,13 @@ void tofPrint(String s, byte r, unsigned int v) {
 
 
 void setup() {
+  //Inicialização do Serial
   Serial.begin(SERIALSPEED);
   Serial.setTimeout(SERIALDELAY);
   delay(600);
   Serial.println("Pronto[Serial]");
+
+  //Inicialização dos Sensores e portas
   dht.begin();
   for(byte s = 0; s < 30; s++) { if(tof.begin()) { break; } }
   tof.begin() ? Serial.println(F("Pronto[ToF]")) : Serial.println(F("Erro[ToF]"));
@@ -131,14 +134,14 @@ void setup() {
 
 
 void loop() {
-  Cmd_read(spltCmd, &recived, '\n', ' ');
+  Cmd_read(spltCmd, &recived, '\n', ' '); //Ler o Serial
 
-  if(recived && !exe && !cal) {
+  if(recived && !exe && !cal) { //Escopo de comandos *Funções no cabeçalho*
     if(spltCmd[0] == "SVC") { if(spltCmd[1] == "START") { exe = true; } }
     else if(spltCmd[0] == "SYS") {
       if(spltCmd[1] == "-VVC") { 
         Serial.print(F("\tVVC -> ")); Serial.print(spltCmd[2]); Serial.println(F("mm"));
-        calVvc = spltCmd[2].toFloat();
+        calVvc = spltCmd[2].toInt();
       }
       else if(spltCmd[1] == "-_VVC") {  Serial.print(F("\tVVC == ")); Serial.print(spltCmd[2]); Serial.println(F("mm")); }
       else if(spltCmd[1] == "-RN") {
@@ -202,22 +205,24 @@ void loop() {
     }*/
   }
 
-  else if(exe) {
+  else if(exe) {  //Ciclo de execução
     if(spltCmd[0] == "D") {
       for(byte x = 0; x < readNumb; x++) { tofPrint("\t\t", x+1, tofRead(c)); }
     }
-    else if(spltCmd[0] == "E") { exe = false; Serial.print(F("\t")); Serial.print(F("Serviço parado")); }
+    else if(spltCmd[0] == "E") {
+      exe = false; Serial.print(F("\t")); Serial.print(F("Serviço parado"));
+    }
   }
 
-  else if(cal) {
+  else if(cal) {  //Ciclo de calibração
     if(spltCmd[0] == "D") { calStep++; }
     if(spltCmd[0] == "E") { Serial.println(F("Calibração parada")); calStep = 0; cal = false; }
     averageReadBase = 0;
-    if(calStep == 0 || calStep == 3) {
+    if(calStep == 0 || calStep == 3) {  //Aviso de calibração
       Serial.print(F("\tCalibrar ToF -> ")); Serial.println(readNumbC);
       calStep++;
     }
-    else if(calStep == 2) {
+    else if(calStep == 2) {             //Medidas da base
       Serial.println(F("\t\tMedidas [base]:"));
       for(byte r = 0; r < readNumbC; r++) {
         unsigned int currentRead = tofRead(0);
@@ -227,7 +232,7 @@ void loop() {
       averageReadBase = averageReadBase / readNumbC;
       calStep++;
     }
-    else if(calStep == 5) {
+    else if(calStep == 5) {             //Medidas do bloco
       Serial.println(F("\t\tMedidas [bloco]:"));
       for(byte r = 0; r < readNumbC; r++) {
         unsigned int currentRead = tofRead(0);
@@ -235,14 +240,19 @@ void loop() {
         averageReadBlock += currentRead;
       }
       Serial.println(F("\tFim da Calibração:"));
+      //Atualizar as variáveis
       calStep = 0;
       cal = false;
       averageReadBlock = averageReadBlock / readNumbC;
       blockHeight = averageReadBase - averageReadBlock;
       c = calVvc - blockHeight;
+
+      //Valores das leituras
       Serial.print(F("\t\tBase:  ")); Serial.print(averageReadBase); Serial.println(F("mm"));
       Serial.print(F("\t\tBloco: ")); Serial.print(averageReadBlock); Serial.println(F("mm"));
       Serial.print(F("\t\tCorr:  ")); Serial.print(c); Serial.println(F("mm"));
+
+      //Leitura da temperatura e umidade
       sensors_event_t event;
       dht.temperature().getEvent(&event);
       char temperature = event.temperature;
@@ -254,7 +264,8 @@ void loop() {
       else { Serial.print("Umid: "); Serial.print(humidity); Serial.println(F("%")); }
     }
   }
-  
+
+  //Reinicia as variáveis de comando
   Cmd_clear(spltCmd);
   recived = false;
 }
