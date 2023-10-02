@@ -217,13 +217,13 @@ void loop() {
   else if(cal) {  //Ciclo de calibração
     if(spltCmd[0] == "D") { calStep++; }
     if(spltCmd[0] == "E") { Serial.println(F("Calibração parada")); calStep = 0; cal = false; }
-    averageReadBase = 0;
     if(calStep == 0 || calStep == 3) {  //Aviso de calibração
       Serial.print(F("\tCalibrar ToF -> ")); Serial.println(readNumbC);
       calStep++;
     }
     else if(calStep == 2) {             //Medidas da base
       Serial.println(F("\t\tMedidas [base]:"));
+      averageReadBase = 0; 
       for(byte r = 0; r < readNumbC; r++) {
         unsigned int currentRead = tofRead(0);
         tofPrint("\t\t\tBase ", r+1, tofRead(0));
