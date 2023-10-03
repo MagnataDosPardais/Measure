@@ -22,7 +22,7 @@
   *       -> E: Interrompe o serviço
   *     -> -M [byte]: Realiza [byte] medições instantâneas corrigidas
   *     -> -R [byte]: Realiza [byte] medições instantâneas cruas
-  *   -> DHT: Executa uma operação no sensor DHT11 ~(Desativado por padrão devido ao armazenamento)
+  *   -> DHT: Executa uma operação no sensor DHT11
   *     -> -R ['H','A','T']: Realiza medições instantâneas da ['T','A'] == Temperatura, ['H','A'] == Umidade
   *     -> -F: Apresenta as features (características) do sensor
   * 
