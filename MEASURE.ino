@@ -162,7 +162,7 @@ void loop() {
         for(byte r = 0; r < spltCmd[2].toInt(); r++) { tofPrint("\t\t", r+1, tofRead(0)); }
       }
     }
-    /*else if(spltCmd[0] == "DHT") {
+    else if(spltCmd[0] == "DHT") {
       if(spltCmd[1] == "-R") {
         for(int x = spltCmd[2].toInt(); x <= 0; x--) {
           sensors_event_t event;
@@ -202,7 +202,7 @@ void loop() {
           Serial.println("------------------------------------");
         }
       }
-    }*/
+    }
   }
 
   else if(exe) {  //Ciclo de execução
